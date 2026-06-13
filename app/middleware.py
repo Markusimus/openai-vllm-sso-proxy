@@ -1,12 +1,13 @@
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 import jwt
+import json
 import httpx
 from .config import settings
 from .database import get_db
+from .jwks import jwks_cache
 import time
 import uuid
-from functools import wraps
 
 async def jwt_auth_middleware(request: Request, call_next):
     if request.url.path.startswith("/health"):
@@ -19,14 +20,32 @@ async def jwt_auth_middleware(request: Request, call_next):
     token = auth_header.split(" ")[1]
     
     try:
-        # Validate JWT
         if settings.JWKS_URL:
-            # TODO: Implement JWKS fetching + caching
-            pass
-        else:
+            # Use cached JWKS
+            jwks = await jwks_cache.get_keys(settings.JWKS_URL)
+            
+            # Get kid from token header
+            unverified_headers = jwt.get_unverified_header(token)
+            kid = unverified_headers.get("kid")
+            
+            if not kid or kid not in jwks:
+                raise HTTPException(status_code=401, detail="Invalid token: unknown key ID")
+            
+            key = jwks[kid]
+            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
+            
             payload = jwt.decode(
                 token,
-                settings.JWT_PUBLIC_KEY or settings.JWT_ISSUER,  # Simplified for now
+                key=public_key,
+                algorithms=["RS256"],
+                issuer=settings.JWT_ISSUER,
+                audience=settings.JWT_AUDIENCE,
+            )
+        else:
+            # Fallback to static public key / secret
+            payload = jwt.decode(
+                token,
+                settings.JWT_PUBLIC_KEY or settings.JWT_ISSUER,
                 algorithms=["RS256", "HS256"],
                 issuer=settings.JWT_ISSUER,
                 audience=settings.JWT_AUDIENCE,
@@ -44,7 +63,7 @@ async def jwt_auth_middleware(request: Request, call_next):
     except jwt.InvalidTokenError as e:
         return JSONResponse(status_code=401, content={"error": f"Invalid token: {str(e)}"})
     except Exception as e:
-        return JSONResponse(status_code=401, content={"error": "Authentication failed"})
+        return JSONResponse(status_code=401, content={"error": f"Authentication failed: {str(e)}"})
     
     # Check approved users
     conn = get_db()
