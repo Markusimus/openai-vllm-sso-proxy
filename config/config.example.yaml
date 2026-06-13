@@ -1,0 +1,10 @@
+# Model to vLLM backend mapping
+models:
+  llama-3-8b: "http://vllm-llama:8000"
+  mixtral-8x7b: "http://vllm-mixtral:8000"
+  # Add more models here
+  # You can use aliases too, e.g. "gpt-4o": "http://vllm-llama:8000"
+
+# Optional quotas (per user, monthly tokens)
+quotas:
+  default_monthly_tokens: 1000000

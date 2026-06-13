@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  proxy:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PROXY_JWT_ISSUER=https://your-sso-provider.com/
+      - PROXY_JWT_AUDIENCE=your-audience
+      - PROXY_JWKS_URL=https://your-sso-provider.com/.well-known/jwks.json
+      # Add more env vars as needed
+
+  # Example vLLM services (uncomment and configure)
+  # vllm-llama:
+  #   image: vllm/vllm-openai:latest
+  #   ports:
+  #     - "8001:8000"
+  #   environment:
+  #     - MODEL=meta-llama/Llama-3-8B
